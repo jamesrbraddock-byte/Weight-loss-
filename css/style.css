@@ -120,6 +120,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-2);outlin
 .calorie-guide{display:flex;flex-direction:column;gap:.35rem;font-size:.85rem}
 .calorie-guide .row{display:flex;justify-content:space-between}
 .calorie-guide .row span:last-child{font-weight:600}
+.calorie-guide .row span.good{color:var(--accent)}
+.calorie-guide .row span.warn{color:var(--warn)}
+.calorie-guide .row span.bad{color:var(--bad)}
 .calorie-guide .note{color:var(--muted);font-size:.78rem;margin-top:.3rem}
 
 details summary{cursor:pointer}

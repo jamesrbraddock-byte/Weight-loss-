@@ -212,13 +212,18 @@ function renderWeekSummary() {
   const football = thisWeek.filter(e => e.football).length;
   const drinks = thisWeek.reduce((s, e) => s + Number(e.drinks || 0), 0);
   const skippedBreakfast = thisWeek.filter(e => e.skippedBreakfast).length;
+  const loggedCals = thisWeek.filter(e => e.calories != null);
+  const avgCals = loggedCals.length
+    ? Math.round(loggedCals.reduce((s, e) => s + Number(e.calories), 0) / loggedCals.length)
+    : null;
 
   const rows = [
     ['Golf rounds', golf],
     ['Dog walks', dogWalks],
     ['Pub nights', `${pub} (${drinks} drinks)`],
     ['Football matches', football],
-    ['Breakfasts skipped', skippedBreakfast]
+    ['Breakfasts skipped', skippedBreakfast],
+    ['Avg calories logged', avgCals != null ? `${avgCals} kcal (${loggedCals.length}d)` : '—']
   ];
   document.getElementById('weekSummary').innerHTML =
     rows.map(([l, v]) => `<li><span>${l}</span><span>${v}</span></li>`).join('');
@@ -230,10 +235,26 @@ function renderCalorieGuide() {
   const s = computeStats();
   const c = estimateCalories(s);
   const el = document.getElementById('calorieGuide');
+
+  const wk = startOfWeek(todayISO());
+  const loggedCals = state.entries.filter(e => e.date >= wk && e.calories != null);
+  const avgCals = loggedCals.length
+    ? Math.round(loggedCals.reduce((s2, e) => s2 + Number(e.calories), 0) / loggedCals.length)
+    : null;
+
+  let actualRow = `<div class="row"><span>This week's average</span><span>not logged yet</span></div>`;
+  if (avgCals != null) {
+    const diff = avgCals - Math.round(c.target);
+    const diffLabel = diff === 0 ? 'on target' : (diff > 0 ? `+${diff} over` : `${diff} under`);
+    const cls = diff > 150 ? 'bad' : (diff > 0 ? 'warn' : 'good');
+    actualRow = `<div class="row"><span>This week's average</span><span class="${cls}">${avgCals} kcal/day (${diffLabel})</span></div>`;
+  }
+
   el.innerHTML = `
     <div class="row"><span>Estimated maintenance</span><span>${Math.round(c.tdee)} kcal/day</span></div>
     <div class="row"><span>Target on plan days</span><span>${Math.round(c.target)} kcal/day</span></div>
     <div class="row"><span>Deficit needed</span><span>${Math.round(c.deficitPerDay)} kcal/day</span></div>
+    ${actualRow}
     <div class="note">Estimate only (Mifflin-St Jeor + light activity). Bank a bigger deficit Sun–Thu to cover golf Saturdays, pub nights and football trips.</div>
   `;
 }
@@ -252,6 +273,7 @@ function renderHistory() {
     <tr>
       <td>${e.date}</td>
       <td>${e.weight != null && e.weight !== '' ? Number(e.weight).toFixed(1) : '—'}</td>
+      <td>${e.calories != null ? e.calories : '—'}</td>
       <td class="notes-cell">${foodTags(e)}</td>
       <td>${e.golf ? '✓' : ''}</td>
       <td>${e.dogWalks || 0}</td>
@@ -306,6 +328,7 @@ function readLogForm() {
     weight: document.getElementById('f-weight').value || null,
     skippedBreakfast: document.getElementById('f-skippedBreakfast').checked,
     meals,
+    calories: document.getElementById('f-calories').value ? Number(document.getElementById('f-calories').value) : null,
     golf: document.getElementById('f-golf').checked,
     dogWalks: Number(document.getElementById('f-dogwalks').value),
     pub: document.getElementById('f-pub').checked,
