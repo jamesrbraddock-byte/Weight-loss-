@@ -121,22 +121,47 @@ function computeStats() {
   };
 }
 
-/* rough Mifflin-St Jeor, male */
-function estimateTDEEForWeight(weightKg) {
+/* rough Mifflin-St Jeor, male. Sedentary base (desk job, no incidental
+   exercise) plus explicit add-ons for logged activity, rather than folding
+   an assumed activity level into a flat multiplier. */
+const ACTIVITY_KCAL = {
+  golf: 400,       // walking 18 holes
+  dogWalkEach: 120, // per brisk 30-45 min walk
+  football: 150     // matchday walking/standing/travel
+};
+
+function sedentaryTDEEForWeight(weightKg) {
   const p = state.profile;
   const bmr = 10 * weightKg + 6.25 * Number(p.heightCm) - 5 * Number(p.age) + 5;
-  return bmr * 1.35; // desk job + light daily walking baseline
+  return bmr * 1.2;
+}
+
+function activityCalories(entry) {
+  if (!entry) return 0;
+  let cals = 0;
+  if (entry.golf) cals += ACTIVITY_KCAL.golf;
+  if (entry.dogWalks) cals += Number(entry.dogWalks) * ACTIVITY_KCAL.dogWalkEach;
+  if (entry.football) cals += ACTIVITY_KCAL.football;
+  return cals;
+}
+
+function estimateTDEEForEntry(weightKg, entry) {
+  return sedentaryTDEEForWeight(weightKg) + activityCalories(entry);
 }
 
 function estimateCalories(stats) {
-  const tdee = estimateTDEEForWeight(stats.cur);
+  // no specific day to key activity off, so assume the daily dog walks
+  // that are a near-constant in the routine
+  const tdee = sedentaryTDEEForWeight(stats.cur) + 2 * ACTIVITY_KCAL.dogWalkEach;
   const requiredRate = isFinite(stats.requiredWeeklyRate) ? stats.requiredWeeklyRate : 0;
   const deficitPerDay = (requiredRate * 7700) / 7;
   const target = Math.max(tdee - deficitPerDay, 1400);
   return { bmr: 10 * stats.cur + 6.25 * Number(state.profile.heightCm) - 5 * Number(state.profile.age) + 5, tdee, deficitPerDay, target };
 }
 
-/* actual daily calorie deficit (estimated maintenance - logged calories) for days with calories logged */
+/* actual daily calorie deficit (estimated maintenance - logged calories),
+   maintenance adjusted for that day's logged golf/dog walks/football, for
+   days with calories logged */
 function dailyDeficitEntries() {
   const w = weighedEntries();
   return sortedEntries()
@@ -149,9 +174,16 @@ function dailyDeficitEntries() {
           ? Number(priorWeighed[priorWeighed.length - 1].weight)
           : Number(state.profile.startWeight);
       }
-      const tdee = estimateTDEEForWeight(weightForDay);
+      const tdee = estimateTDEEForEntry(weightForDay, e);
       return { date: e.date, deficit: tdee - Number(e.calories) };
     });
+}
+
+function weeklyDeficitAvg() {
+  const wk = startOfWeek(todayISO());
+  const list = dailyDeficitEntries().filter(d => d.date >= wk);
+  if (!list.length) return null;
+  return { avg: list.reduce((s, d) => s + d.deficit, 0) / list.length, count: list.length };
 }
 
 /* ---------- rendering: stat grid ---------- */
@@ -298,21 +330,26 @@ function renderCalorieGuide() {
   const avgCals = loggedCals.length
     ? Math.round(loggedCals.reduce((s2, e) => s2 + Number(e.calories), 0) / loggedCals.length)
     : null;
+  const avgRow = avgCals != null
+    ? `<div class="row"><span>This week's avg intake</span><span>${avgCals} kcal/day</span></div>`
+    : `<div class="row"><span>This week's avg intake</span><span>not logged yet</span></div>`;
 
-  let actualRow = `<div class="row"><span>This week's average</span><span>not logged yet</span></div>`;
-  if (avgCals != null) {
-    const diff = avgCals - Math.round(c.target);
-    const diffLabel = diff === 0 ? 'on target' : (diff > 0 ? `+${diff} over` : `${diff} under`);
-    const cls = diff > 150 ? 'bad' : (diff > 0 ? 'warn' : 'good');
-    actualRow = `<div class="row"><span>This week's average</span><span class="${cls}">${avgCals} kcal/day (${diffLabel})</span></div>`;
+  const wDef = weeklyDeficitAvg();
+  let deficitRow = `<div class="row"><span>This week's actual deficit</span><span>not logged yet</span></div>`;
+  if (wDef) {
+    const diff = wDef.avg - c.deficitPerDay;
+    const diffLabel = diff >= 0 ? `+${Math.round(diff)} ahead` : `${Math.round(diff)} short`;
+    const cls = diff >= -50 ? 'good' : (diff >= -300 ? 'warn' : 'bad');
+    deficitRow = `<div class="row"><span>This week's actual deficit</span><span class="${cls}">${Math.round(wDef.avg)} kcal/day (${diffLabel}, ${wDef.count}d)</span></div>`;
   }
 
   el.innerHTML = `
     <div class="row"><span>Estimated maintenance</span><span>${Math.round(c.tdee)} kcal/day</span></div>
     <div class="row"><span>Target on plan days</span><span>${Math.round(c.target)} kcal/day</span></div>
     <div class="row"><span>Deficit needed</span><span>${Math.round(c.deficitPerDay)} kcal/day</span></div>
-    ${actualRow}
-    <div class="note">Estimate only (Mifflin-St Jeor + light activity). Bank a bigger deficit Sun–Thu to cover golf Saturdays, pub nights and football trips.</div>
+    ${avgRow}
+    ${deficitRow}
+    <div class="note">Estimate only (Mifflin-St Jeor). "Actual deficit" adjusts maintenance up on days you log golf, dog walks or a football match, so it reflects the calories you actually burned that day, not just intake.</div>
   `;
 }
 
