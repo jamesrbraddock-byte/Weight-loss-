@@ -60,6 +60,7 @@ body{
 .legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:.35rem;vertical-align:middle}
 .legend .dot.actual{background:var(--accent-2)}
 .legend .dot.target{background:var(--muted)}
+.legend .dot.deficit{background:var(--warn)}
 
 .two-col{display:grid;grid-template-columns:1.3fr 1fr;gap:1.1rem}
 @media (max-width:760px){.two-col{grid-template-columns:1fr}}

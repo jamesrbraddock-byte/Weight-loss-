@@ -122,14 +122,36 @@ function computeStats() {
 }
 
 /* rough Mifflin-St Jeor, male */
-function estimateCalories(stats) {
+function estimateTDEEForWeight(weightKg) {
   const p = state.profile;
-  const bmr = 10 * stats.cur + 6.25 * Number(p.heightCm) - 5 * Number(p.age) + 5;
-  const tdee = bmr * 1.35; // desk job + light daily walking baseline
+  const bmr = 10 * weightKg + 6.25 * Number(p.heightCm) - 5 * Number(p.age) + 5;
+  return bmr * 1.35; // desk job + light daily walking baseline
+}
+
+function estimateCalories(stats) {
+  const tdee = estimateTDEEForWeight(stats.cur);
   const requiredRate = isFinite(stats.requiredWeeklyRate) ? stats.requiredWeeklyRate : 0;
   const deficitPerDay = (requiredRate * 7700) / 7;
   const target = Math.max(tdee - deficitPerDay, 1400);
-  return { bmr, tdee, deficitPerDay, target };
+  return { bmr: 10 * stats.cur + 6.25 * Number(state.profile.heightCm) - 5 * Number(state.profile.age) + 5, tdee, deficitPerDay, target };
+}
+
+/* actual daily calorie deficit (estimated maintenance - logged calories) for days with calories logged */
+function dailyDeficitEntries() {
+  const w = weighedEntries();
+  return sortedEntries()
+    .filter(e => e.calories != null)
+    .map(e => {
+      let weightForDay = e.weight != null && e.weight !== '' ? Number(e.weight) : null;
+      if (weightForDay == null) {
+        const priorWeighed = w.filter(we => we.date <= e.date);
+        weightForDay = priorWeighed.length
+          ? Number(priorWeighed[priorWeighed.length - 1].weight)
+          : Number(state.profile.startWeight);
+      }
+      const tdee = estimateTDEEForWeight(weightForDay);
+      return { date: e.date, deficit: tdee - Number(e.calories) };
+    });
 }
 
 /* ---------- rendering: stat grid ---------- */
@@ -164,8 +186,9 @@ function renderChart() {
   const svg = document.getElementById('chart');
   const p = state.profile;
   const w = weighedEntries();
+  const deficits = dailyDeficitEntries();
 
-  const allDates = [p.startDate, p.goalDate, ...w.map(e => e.date)];
+  const allDates = [p.startDate, p.goalDate, ...w.map(e => e.date), ...deficits.map(d => d.date)];
   const minDayIdx = Math.min(...allDates.map(d => daysBetween('1970-01-01', d)));
   const maxDayIdx = Math.max(...allDates.map(d => daysBetween('1970-01-01', d)));
   const dayRange = Math.max(maxDayIdx - minDayIdx, 1);
@@ -175,8 +198,8 @@ function renderChart() {
   const maxW = Math.max(...allWeights) + 2;
   const wRange = Math.max(maxW - minW, 1);
 
-  const PAD = 10, W = 640, H = 220;
-  const x = day => PAD + ((day - minDayIdx) / dayRange) * (W - 2 * PAD);
+  const PAD = 10, RPAD = 46, W = 640, H = 220;
+  const x = day => PAD + ((day - minDayIdx) / dayRange) * (W - PAD - RPAD);
   const y = weight => H - PAD - ((weight - minW) / wRange) * (H - 2 * PAD);
 
   const targetX1 = x(daysBetween('1970-01-01', p.startDate));
@@ -193,11 +216,45 @@ function renderChart() {
     dots += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.5" fill="var(--accent-2)"></circle>`;
   });
 
+  // secondary (right) axis: calorie deficit, own scale so it fits the same plot area
+  let deficitPath = '', deficitDots = '', zeroLine = '', axisLabels = '';
+  if (deficits.length) {
+    const values = deficits.map(d => d.deficit);
+    const rawMin = Math.min(...values, 0);
+    const rawMax = Math.max(...values, 0);
+    const padAmt = Math.max((rawMax - rawMin) * 0.15, 100);
+    const minD = rawMin - padAmt;
+    const maxD = rawMax + padAmt;
+    const dRange = Math.max(maxD - minD, 1);
+    const y2 = val => H - PAD - ((val - minD) / dRange) * (H - 2 * PAD);
+
+    deficits.forEach((d, i) => {
+      const px = x(daysBetween('1970-01-01', d.date));
+      const py = y2(d.deficit);
+      deficitPath += (i === 0 ? 'M' : 'L') + px.toFixed(1) + ',' + py.toFixed(1) + ' ';
+      deficitDots += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2.5" fill="var(--warn)"></circle>`;
+    });
+
+    if (minD < 0 && maxD > 0) {
+      const zy = y2(0).toFixed(1);
+      zeroLine = `<line x1="${PAD}" y1="${zy}" x2="${W - RPAD}" y2="${zy}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="2,3" opacity="0.5" />`;
+    }
+    axisLabels = `
+      <text x="${W - RPAD + 6}" y="${(PAD + 4).toFixed(1)}" fill="var(--warn)" font-size="9">${Math.round(maxD)}</text>
+      <text x="${W - RPAD + 6}" y="${(H - PAD).toFixed(1)}" fill="var(--warn)" font-size="9">${Math.round(minD)}</text>
+      <text x="${W - RPAD + 6}" y="${(H / 2).toFixed(1)}" fill="var(--warn)" font-size="9">kcal</text>
+    `;
+  }
+
   svg.innerHTML = `
     <line x1="${targetX1.toFixed(1)}" y1="${targetY1.toFixed(1)}" x2="${targetX2.toFixed(1)}" y2="${targetY2.toFixed(1)}"
       stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5,4" />
     ${actualPath ? `<path d="${actualPath}" fill="none" stroke="var(--accent-2)" stroke-width="2.5" />` : ''}
     ${dots}
+    ${zeroLine}
+    ${deficitPath ? `<path d="${deficitPath}" fill="none" stroke="var(--warn)" stroke-width="1.75" stroke-dasharray="1,2" />` : ''}
+    ${deficitDots}
+    ${axisLabels}
   `;
 }
 
