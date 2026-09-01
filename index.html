@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winter Diet Tracker</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="app-header">
+    <h1>Winter Diet Tracker</h1>
+    <p class="tagline">120kg &rarr; 90kg. Golf, dogs, football and Friday pints, all accounted for.</p>
+  </header>
+
+  <section class="stat-grid" id="statGrid"></section>
+
+  <section class="card" id="chartCard">
+    <div class="card-head">
+      <h2>Weight trend</h2>
+      <span class="hint">Solid line = you. Dashed line = target pace.</span>
+    </div>
+    <svg id="chart" viewBox="0 0 640 220" preserveAspectRatio="none"></svg>
+    <div class="legend">
+      <span><i class="dot actual"></i> Actual weight</span>
+      <span><i class="dot target"></i> Target pace</span>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <section class="card" id="logCard">
+      <div class="card-head">
+        <h2>Log today</h2>
+        <span class="hint" id="logDateHint"></span>
+      </div>
+      <form id="logForm">
+        <div class="field-row">
+          <label>Date
+            <input type="date" id="f-date" required>
+          </label>
+          <label>Weight (kg)
+            <input type="number" id="f-weight" step="0.1" min="40" max="300" placeholder="optional">
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Food</legend>
+          <label class="chk"><input type="checkbox" id="f-skippedBreakfast" checked> Skipped breakfast</label>
+          <div class="chip-row" id="mealChips">
+            <label class="chip"><input type="checkbox" value="chicken"> Chicken</label>
+            <label class="chip"><input type="checkbox" value="fish"> Fish</label>
+            <label class="chip"><input type="checkbox" value="rice"> Rice</label>
+            <label class="chip"><input type="checkbox" value="salad"> Salad</label>
+            <label class="chip"><input type="checkbox" value="other"> Off-plan</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Activity</legend>
+          <div class="field-row">
+            <label class="chk"><input type="checkbox" id="f-golf"> Golf played</label>
+            <label>Dog walks
+              <select id="f-dogwalks">
+                <option value="0">0</option>
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3+</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Social</legend>
+          <div class="field-row">
+            <label class="chk"><input type="checkbox" id="f-pub"> Pub night</label>
+            <label>Drinks
+              <input type="number" id="f-drinks" min="0" max="30" value="0" style="width:4rem">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="chk"><input type="checkbox" id="f-football"> Football match</label>
+            <label class="chk"><input type="checkbox" id="f-trip"> 2-day trip</label>
+          </div>
+        </fieldset>
+
+        <label class="notes-label">Notes
+          <textarea id="f-notes" rows="2" placeholder="anything worth remembering"></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Save entry</button>
+          <button type="button" class="btn" id="clearFormBtn">Clear</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="weekCard">
+      <div class="card-head"><h2>This week</h2></div>
+      <ul class="week-summary" id="weekSummary"></ul>
+
+      <div class="card-head" style="margin-top:1.25rem">
+        <h2>Calorie guide</h2>
+        <span class="hint">rough estimate, not medical advice</span>
+      </div>
+      <div id="calorieGuide" class="calorie-guide"></div>
+    </section>
+  </div>
+
+  <section class="card" id="profileCard">
+    <details>
+      <summary><h2 style="display:inline">Profile &amp; goal settings</h2></summary>
+      <form id="profileForm">
+        <div class="field-row">
+          <label>Height (cm)
+            <input type="number" id="p-height" min="120" max="230">
+          </label>
+          <label>Age
+            <input type="number" id="p-age" min="16" max="100">
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Start date
+            <input type="date" id="p-startDate">
+          </label>
+          <label>Start weight (kg)
+            <input type="number" id="p-startWeight" step="0.1">
+          </label>
+        </div>
+        <div class="field-row">
+          <label>Goal date
+            <input type="date" id="p-goalDate">
+          </label>
+          <label>Goal weight (kg)
+            <input type="number" id="p-goalWeight" step="0.1">
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Save profile</button>
+        </div>
+      </form>
+    </details>
+  </section>
+
+  <section class="card" id="historyCard">
+    <div class="card-head">
+      <h2>History</h2>
+      <div class="io-actions">
+        <button class="btn" id="exportBtn">Export JSON</button>
+        <button class="btn" id="importBtn">Import JSON</button>
+        <button class="btn danger" id="resetBtn">Reset all data</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Date</th><th>Weight</th><th>Food</th><th>Golf</th><th>Dogs</th>
+            <th>Pub</th><th>Football</th><th>Notes</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="app-footer">
+    <p>All data stays in this browser (localStorage). Nothing is sent anywhere &mdash; export regularly as a backup.</p>
+  </footer>
+
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>
